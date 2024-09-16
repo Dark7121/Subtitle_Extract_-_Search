@@ -1,0 +1,8 @@
+django
+moviepy
+django-cors-headers
+langdetect
+logging
+gunicorn
+psycopg
+psycopg2-binary

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <title>Video Detail</title>
+</head>
+<body>
+    <h1>{{ video.title }}</h1>
+
+    <video id="video" controls>
+        <source src="{{ video.video_file.url }}" type="video/mp4">
+        <source src="{{ video.video_file.url }}" type="video/ogg">
+        <source src="{{ video.video_file.url }}" type="video/webm">
+    Your browser does not support the video tag.
+        {% for subtitle in subtitles_with_names %}
+            <track label="{{ subtitle.language }}" kind="subtitles" src="{{ subtitle.content }}" srclang="{{ subtitle.language|lower }}">
+        {% endfor %}
+    </video>
+
+    <form id="search-form">
+        <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Search subtitles...">
+        <button type="submit">Search</button>
+    </form>
+
+    <ul id="results"></ul>
+
+    <script>
+    $(document).ready(function() {
+        $('#search-form').on('submit', function(event) {
+            event.preventDefault();
+            
+            const query = $(this).find('input[name="q"]').val();
+            $.ajax({
+                url: window.location.href,
+                data: { q: query },
+                success: function(data) {
+                    const results = data.results;
+                    const resultsList = $('#results');
+                    resultsList.empty();
+                    if (results.length > 0) {
+                        results.forEach(result => {
+                            const li = $('<li></li>');
+                            const button = $('<button></button>').text(`${result.timestamp}: ${result.line}`).data('timestamp', result.timestamp);
+                            
+                            button.on('click', function() {
+                                const timestamp = $(this).data('timestamp');
+                                const timeInSeconds = parseTime(timestamp);
+
+                                console.log(`Seeking to ${timeInSeconds} seconds`);
+
+                                const videoElement = $('#video')[0];
+
+                                console.log('Video src:', videoElement.src);
+                                console.log('Video readyState:', videoElement.readyState);
+                                console.log('Video currentTime before:', videoElement.currentTime);
+
+                                function seekAndPlay() {
+                                    if (videoElement.readyState >= 2) { 
+                                        videoElement.currentTime = timeInSeconds;
+                                        console.log('Video currentTime set to:', videoElement.currentTime);
+
+                                        setTimeout(() => {
+                                            videoElement.play().then(() => {
+                                                console.log('Video currentTime after play:', videoElement.currentTime);
+                                            }).catch(error => {
+                                                console.error('Error playing video:', error);
+                                            });
+                                        }, 500);
+                                    } else {
+                                        videoElement.addEventListener('loadeddata', function() {
+                                            setTimeout(seekAndPlay, 500);
+                                        }, { once: true });
+                                    }
+                                }
+
+                                seekAndPlay();
+                            });
+                            li.append(button);
+                            resultsList.append(li);
+                        });
+                    } else {
+                        resultsList.append('<li>No results found</li>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Search request failed:', error);
+                }
+            });
+        });
+
+        function parseTime(timestamp) {
+            try {
+                const startTime = timestamp.split(' --> ')[0].trim();
+                const timeParts = startTime.split(':');
+
+                if (timeParts.length < 2) {
+                    console.error('Invalid timestamp format:', timestamp);
+                    return 0;
+                }
+
+                let hours = 0, minutes = 0, seconds = 0, milliseconds = 0;
+
+                if (timeParts.length === 3) {
+                    hours = parseInt(timeParts[0], 10);
+                    minutes = parseInt(timeParts[1], 10);
+                    const secondsAndMilliseconds = timeParts[2].split('.');
+                    seconds = parseInt(secondsAndMilliseconds[0], 10);
+                    milliseconds = secondsAndMilliseconds[1] ? parseInt(secondsAndMilliseconds[1], 10) : 0;
+                } else {
+                    minutes = parseInt(timeParts[0], 10);
+                    const secondsAndMilliseconds = timeParts[1].split('.');
+                    seconds = parseInt(secondsAndMilliseconds[0], 10);
+                    milliseconds = secondsAndMilliseconds[1] ? parseInt(secondsAndMilliseconds[1], 10) : 0;
+                }
+
+                const totalSeconds = (hours * 3600) + (minutes * 60) + seconds + (milliseconds / 1000);
+                console.log(`Parsed timestamp "${timestamp}" to ${totalSeconds} seconds`);
+                return totalSeconds;
+            } catch (error) {
+                console.error('Error parsing timestamp:', timestamp, error);
+                return 0;
+            }
+        }
+    });
+    </script>
+</body>
+</html>
